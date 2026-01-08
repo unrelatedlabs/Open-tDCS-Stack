@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>tDCS</title>
+  <title>Open-tDCS-Stack</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&display=swap');
     
@@ -88,6 +88,7 @@
       color: var(--muted);
       margin-bottom: 0.5rem;
       text-transform: uppercase;
+      white-space: nowrap;
     }
     
     input, textarea, select {
@@ -214,25 +215,61 @@
     }
     
     .session-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       padding: 1rem 0;
       border-bottom: 1px solid var(--border);
       font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
     }
-    
+
+    .session-item:hover {
+      background: var(--bg);
+    }
+
     .session-item:last-child {
       border-bottom: none;
     }
-    
+
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .session-date {
       color: var(--muted);
       font-size: 0.75rem;
     }
-    
+
     .session-meta {
       text-align: right;
+    }
+
+    .session-details {
+      display: none;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .session-item.expanded .session-details {
+      display: block;
+    }
+
+    .session-graph {
+      margin-bottom: 1rem;
+    }
+
+    .session-graph canvas {
+      width: 100%;
+      height: 80px;
+    }
+
+    .session-notes {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 0.5rem;
     }
     
     .empty {
@@ -301,15 +338,15 @@
         <div class="row">
           <div>
             <label>current (mA)</label>
-            <input type="number" id="targetCurrent" value="1.0" min="0" max="2" step="0.1">
+            <input type="number" id="targetCurrent" value="2.0" min="0" max="2" step="0.1">
           </div>
           <div>
             <label>duration (min)</label>
-            <input type="number" id="duration" value="20" min="1" max="60">
+            <input type="number" id="duration" value="30" min="1" max="60">
           </div>
           <div>
             <label>ramp (sec)</label>
-            <input type="number" id="rampTime" value="30" min="0" max="120">
+            <input type="number" id="rampTime" value="60" min="0" max="120">
           </div>
         </div>
         
@@ -384,22 +421,29 @@
         device = await navigator.bluetooth.requestDevice({
           filters: [{ services: [SERVICE_UUID] }]
         })
-        
+
         device.addEventListener('gattserverdisconnected', onDisconnect)
-        
+
         server = await device.gatt.connect()
         const service = await server.getPrimaryService(SERVICE_UUID)
-        
+
         readingsChar = await service.getCharacteristic(READINGS_UUID)
         controlChar = await service.getCharacteristic(CONTROL_UUID)
-        
+
         await readingsChar.startNotifications()
         readingsChar.addEventListener('characteristicvaluechanged', onReadings)
-        
+
+        await controlChar.startNotifications()
+        controlChar.addEventListener('characteristicvaluechanged', onTimerUpdate)
+
+        // Read current session state
+        const timerValue = await controlChar.readValue()
+        onTimerUpdate({ target: { value: timerValue } })
+
         $('connectSection').classList.add('hidden')
         $('sessionSection').classList.remove('hidden')
         updateStatus(true)
-        
+
         startGraphUpdate()
       } catch (e) {
         console.error(e)
@@ -432,6 +476,50 @@
       
       if (currentData.length > maxDataPoints) currentData.shift()
       if (impedanceData.length > maxDataPoints) impedanceData.shift()
+    }
+
+    function onTimerUpdate(event) {
+      const data = new DataView(event.target.value.buffer)
+
+      const targetCurrent = data.getUint16(0, true)
+      const timeRemaining = data.getUint16(2, true)
+      const rampUp = data.getUint16(4, true)
+      const rampDown = data.getUint16(6, true)
+
+      // Check if there's an active session
+      if (targetCurrent > 0 && timeRemaining > 0) {
+        if (!sessionActive) {
+          // Session is running but UI doesn't know - sync state
+          sessionActive = true
+
+          // Calculate original session duration and start time
+          // We can't know the exact original duration, so use current timeRemaining
+          sessionDuration = timeRemaining
+          sessionStart = Date.now()
+
+          // Update input fields with current session parameters
+          $('targetCurrent').value = (targetCurrent / 1000).toFixed(1)
+          $('rampTime').value = rampUp
+
+          // Update UI
+          $('startBtn').classList.add('hidden')
+          $('stopBtn').classList.remove('hidden')
+          $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = true)
+          updateStatus(true, true)
+
+          if (!timerInterval) {
+            timerInterval = setInterval(updateTimer, 1000)
+          }
+        }
+
+        // Update timer display from device
+        const mins = Math.floor(timeRemaining / 60)
+        const secs = timeRemaining % 60
+        $('timer').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+      } else if (sessionActive) {
+        // Session ended on device side
+        stopSession()
+      }
     }
 
     async function startSession() {
@@ -484,9 +572,11 @@
           date: new Date().toISOString(),
           duration: elapsed,
           current: parseFloat($('targetCurrent').value),
-          notes: $('notes').value
+          notes: $('notes').value,
+          currentData: [...currentData],
+          impedanceData: [...impedanceData]
         }
-        
+
         sessions.unshift(session)
         localStorage.setItem('tdcs-sessions', JSON.stringify(sessions))
         renderSessions()
@@ -508,45 +598,108 @@
     }
 
     function updateTimer() {
+      // This function now only serves as a backup for timer display
+      // The device notifications (onTimerUpdate) are the primary timer source
+      // and will signal when the session ends
       const elapsed = Math.floor((Date.now() - sessionStart) / 1000)
       const remaining = Math.max(0, sessionDuration - elapsed)
-      
+
+      // Only update display if we're not receiving device updates
+      // (device updates will overwrite this via onTimerUpdate)
       const mins = Math.floor(remaining / 60)
       const secs = remaining % 60
       $('timer').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-      
-      if (remaining <= 0) {
-        stopSession()
-      }
     }
 
     function drawGraph(canvas, data, maxVal, color) {
       const ctx = canvas.getContext('2d')
       const dpr = window.devicePixelRatio || 1
       const rect = canvas.getBoundingClientRect()
-      
+
       canvas.width = rect.width * dpr
       canvas.height = rect.height * dpr
       ctx.scale(dpr, dpr)
-      
+
       ctx.clearRect(0, 0, rect.width, rect.height)
-      
+
       if (data.length < 2) return
-      
+
       ctx.strokeStyle = color
       ctx.lineWidth = 1.5
       ctx.beginPath()
-      
+
       const step = rect.width / (maxDataPoints - 1)
       const yScale = rect.height / maxVal
-      
+
       data.forEach((val, i) => {
         const x = i * step
         const y = rect.height - val * yScale
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       })
-      
+
+      ctx.stroke()
+    }
+
+    function drawSessionGraph(canvas, data, maxVal, color) {
+      const ctx = canvas.getContext('2d')
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      ctx.scale(dpr, dpr)
+
+      ctx.clearRect(0, 0, rect.width, rect.height)
+
+      if (!data || data.length < 2) return
+
+      const padding = { left: 30, right: 10, top: 15, bottom: 20 }
+      const graphWidth = rect.width - padding.left - padding.right
+      const graphHeight = rect.height - padding.top - padding.bottom
+
+      // Draw axes
+      ctx.strokeStyle = '#e7e5e4'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      // Y-axis
+      ctx.moveTo(padding.left, padding.top)
+      ctx.lineTo(padding.left, rect.height - padding.bottom)
+      // X-axis
+      ctx.lineTo(rect.width - padding.right, rect.height - padding.bottom)
+      ctx.stroke()
+
+      // Y-axis labels
+      ctx.fillStyle = '#a8a29e'
+      ctx.font = '9px IBM Plex Mono'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(maxVal.toFixed(1), padding.left - 5, padding.top)
+      ctx.fillText((maxVal / 2).toFixed(1), padding.left - 5, padding.top + graphHeight / 2)
+      ctx.fillText('0', padding.left - 5, rect.height - padding.bottom)
+
+      // X-axis labels (time in seconds)
+      const totalSeconds = data.length * 0.5  // 500ms per data point
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.fillText('0s', padding.left, rect.height - padding.bottom + 5)
+      ctx.fillText(`${Math.floor(totalSeconds)}s`, rect.width - padding.right, rect.height - padding.bottom + 5)
+
+      // Draw data line
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+
+      const step = graphWidth / (data.length - 1)
+      const yScale = graphHeight / maxVal
+
+      data.forEach((val, i) => {
+        const x = padding.left + i * step
+        const y = rect.height - padding.bottom - val * yScale
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+
       ctx.stroke()
     }
 
@@ -559,31 +712,77 @@
 
     function renderSessions() {
       const list = $('sessionList')
-      
+
       if (sessions.length === 0) {
         list.innerHTML = '<li class="empty">no sessions yet</li>'
         return
       }
-      
-      list.innerHTML = sessions.slice(0, 20).map(s => {
+
+      list.innerHTML = sessions.slice(0, 20).map((s, idx) => {
         const date = new Date(s.date)
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
         const mins = Math.floor(s.duration / 60)
         const secs = s.duration % 60
-        
+        const hasData = s.currentData && s.currentData.length > 0
+
         return `
-          <li class="session-item">
-            <div>
-              <div>${mins}:${secs.toString().padStart(2, '0')}</div>
-              <div class="session-date">${dateStr} ${timeStr}</div>
+          <li class="session-item" data-session-idx="${idx}">
+            <div class="session-header">
+              <div>
+                <div>${mins}:${secs.toString().padStart(2, '0')}</div>
+                <div class="session-date">${dateStr} ${timeStr}</div>
+              </div>
+              <div class="session-meta">
+                ${s.current} mA
+              </div>
             </div>
-            <div class="session-meta">
-              ${s.current} mA
-            </div>
+            ${hasData ? `
+              <div class="session-details">
+                <div class="session-graph">
+                  <div class="graph-label">current</div>
+                  <canvas id="sessionCurrent${idx}"></canvas>
+                </div>
+                <div class="session-graph">
+                  <div class="graph-label">impedance</div>
+                  <canvas id="sessionImpedance${idx}"></canvas>
+                </div>
+                ${s.notes ? `<div class="session-notes">${s.notes}</div>` : ''}
+              </div>
+            ` : ''}
           </li>
         `
       }).join('')
+
+      // Add click handlers
+      list.querySelectorAll('.session-item').forEach(item => {
+        const idx = parseInt(item.dataset.sessionIdx)
+        const session = sessions[idx]
+
+        item.addEventListener('click', () => {
+          if (!session.currentData || session.currentData.length === 0) return
+
+          const isExpanded = item.classList.contains('expanded')
+
+          // Close all other expanded items
+          list.querySelectorAll('.session-item').forEach(i => i.classList.remove('expanded'))
+
+          if (!isExpanded) {
+            item.classList.add('expanded')
+
+            // Draw graphs
+            setTimeout(() => {
+              const currentCanvas = document.getElementById(`sessionCurrent${idx}`)
+              const impedanceCanvas = document.getElementById(`sessionImpedance${idx}`)
+
+              if (currentCanvas && impedanceCanvas) {
+                drawSessionGraph(currentCanvas, session.currentData, 2.5, '#3b82f6')
+                drawSessionGraph(impedanceCanvas, session.impedanceData, 20, '#22c55e')
+              }
+            }, 50)
+          }
+        })
+      })
     }
 
     function renderHistoryChart() {
@@ -637,6 +836,20 @@
       renderHistoryChart()
       drawGraph($('currentGraph'), currentData, 2.5, '#3b82f6')
       drawGraph($('impedanceGraph'), impedanceData, 20, '#22c55e')
+
+      // Redraw expanded session graphs
+      document.querySelectorAll('.session-item.expanded').forEach(item => {
+        const idx = parseInt(item.dataset.sessionIdx)
+        const session = sessions[idx]
+        if (session && session.currentData) {
+          const currentCanvas = document.getElementById(`sessionCurrent${idx}`)
+          const impedanceCanvas = document.getElementById(`sessionImpedance${idx}`)
+          if (currentCanvas && impedanceCanvas) {
+            drawSessionGraph(currentCanvas, session.currentData, 2.5, '#3b82f6')
+            drawSessionGraph(impedanceCanvas, session.impedanceData, 20, '#22c55e')
+          }
+        }
+      })
     })
   </script>
 </body>

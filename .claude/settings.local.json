@@ -4,7 +4,10 @@
       "WebFetch(domain:wiki.seeedstudio.com)",
       "WebFetch(domain:docs.zephyrproject.org)",
       "WebSearch",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(./build.sh:*)"
     ]
   }
 }

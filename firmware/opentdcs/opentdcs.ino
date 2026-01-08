@@ -9,7 +9,7 @@ const float ADC_REF = 3.3;
 const float ADC_MAX = 1023.0;
 const float RSENSE = 180.0;
 const float VDIV = 6.0;
-const uint16_t PWM_MAX = 255;
+const uint16_t PWM_MAX = 1023;  // 10-bit PWM
 const uint16_t CURRENT_MAX_UA = 4000;
 const uint16_t TEST_CURRENT_UA = 50;
 
@@ -28,6 +28,7 @@ uint16_t impedance = 0;
 uint16_t setCurrent = 0;
 
 volatile bool isConnected = false;
+uint8_t lastLedState = 0;  // 0=off, 1=green, 2=blue, 3=red
 
 SoftwareTimer rampTimer;
 SoftwareTimer measurementTimer;
@@ -39,8 +40,10 @@ BLECharacteristic timerChar("a1b2c3d6-1234-5678-abcd-ef0123456789", BLERead | BL
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);  // Wait up to 3s for serial
-  Serial.println("OpenTDCS Starting...");
+  Serial.println("Open-tDCS-Stack Starting...");
 
+  // Configure PWM: 10-bit resolution, ~15.6kHz frequency (16MHz / 1024)
+  analogWriteResolution(10);
   pinMode(PIN_PWM, OUTPUT);
   analogWrite(PIN_PWM, 0);
 
@@ -50,8 +53,9 @@ void setup() {
   ledOff();
 
   analogReadResolution(10);
-  
+
   Bluefruit.begin();
+  Bluefruit.autoConnLed(false);  // Disable automatic LED control
   Bluefruit.setTxPower(-4);
   Bluefruit.setName("tDCS");
   Bluefruit.Periph.setConnectCallback(onConnect);
@@ -85,7 +89,6 @@ void rampCallback(TimerHandle_t _handle) {
 void measurementCallback(TimerHandle_t _handle) {
   updateMeasurements();
   updateBLE();
-  updateLED();
 
   // Apply test current when connected but not in session
   if (!sessionActive) {
@@ -100,7 +103,9 @@ void measurementCallback(TimerHandle_t _handle) {
 
   // Periodic status logging
   if (sessionActive || isConnected) {
-    Serial.print("I:");
+    Serial.print("Set:");
+    Serial.print(setCurrent);
+    Serial.print("uA I:");
     Serial.print(measuredCurrent);
     Serial.print("uA Z:");
     Serial.print(impedance);
@@ -153,6 +158,7 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
       sessionStart = millis();
       sessionActive = true;
       rampTimer.start();
+      updateLED();
       Serial.print("Session START: ");
       Serial.print(targetCurrent);
       Serial.print("uA, ");
@@ -167,6 +173,7 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
       setCurrent = 0;
       rampTimer.stop();
       applyPWM(0);
+      updateLED();
       Serial.println("Session STOP");
     }
   }
@@ -181,10 +188,11 @@ void updateMeasurements() {
   measuredCurrent = (uint16_t)(currentA * 1000000);
   batteryVoltage = (uint16_t)(vBattery * 1000);
   outputVoltage = (uint16_t)(vOutput * 1000);
-  
+
+  // Calculate impedance: R = V / I = (vBattery - vOutput) / current
   if (measuredCurrent > 10) {
-    float electrodeV = vOutput - (vCurrent * VDIV);
-    impedance = (uint16_t)((electrodeV / currentA) / 1000);
+    float electrodeV = vBattery - vOutput;
+    impedance = (uint16_t)(electrodeV / currentA);
   } else {
     impedance = 0xFFFF;
   }
@@ -204,6 +212,7 @@ void updateSession() {
       setCurrent = 0;
       rampTimer.stop();
       applyPWM(0);
+      updateLED();
       Serial.println("Session COMPLETE");
       return;
     }
@@ -256,10 +265,18 @@ void updateBLE() {
 }
 
 void updateLED() {
-  ledOff();
-  if (sessionActive) ledRed();
-  else if (isConnected) ledBlue();
-  else ledGreen();
+  uint8_t newState;
+  if (sessionActive) newState = 3;  // red
+  else if (isConnected) newState = 2;  // blue
+  else newState = 1;  // green
+
+  if (newState != lastLedState) {
+    ledOff();
+    if (newState == 3) ledRed();
+    else if (newState == 2) ledBlue();
+    else ledGreen();
+    lastLedState = newState;
+  }
 }
 
 void ledOff() {
