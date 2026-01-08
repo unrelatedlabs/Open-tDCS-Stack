@@ -15,9 +15,10 @@ Open-tDCS-Stack is a Bluetooth-enabled tDCS device that provides precise current
 
 
 
-### Pinout Reference
+### Schematics 
 
-See [docs/PINOUT.md](docs/PINOUT.md) for complete pinout information and hardware specifications.
+![Open-tDCS Schematic](docs/schematics.png)
+
 
 ## Firmware
 
