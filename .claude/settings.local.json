@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:wiki.seeedstudio.com)",
+      "WebFetch(domain:docs.zephyrproject.org)",
+      "WebSearch",
+      "Bash(curl:*)"
+    ]
+  }
+}
