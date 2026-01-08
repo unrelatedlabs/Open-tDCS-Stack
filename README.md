@@ -11,7 +11,9 @@ Open-tDCS-Stack is a Bluetooth-enabled tDCS device that provides precise current
 - **Microcontroller**: Seeed Studio XIAO BLE nRF52840
 - **Connectivity**: Bluetooth 5.0 (BLE)
 - **Current Range**: 0-4mA (configurable)
-- **Battery**: Rechargeable via USB-C
+- **Battery**: 4x CR2025
+
+
 
 ### Pinout Reference
 
@@ -19,7 +21,10 @@ See [docs/PINOUT.md](docs/PINOUT.md) for complete pinout information and hardwar
 
 ## Firmware
 
-The firmware is located in `firmware/opentdcs/` and is built using the Arduino framework with the Adafruit nRF52 BSP.
+The firmware is located in `firmware/build/opentdcs.ino.uf2`
+To install on the XIAO BLE nRF52840. Place it into bootloader mode by quickly pressing the reset button twice. 
+A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opentdcs.ino.uf2` file. Done
+
 
 ### Features
 
@@ -41,6 +46,10 @@ The firmware is located in `firmware/opentdcs/` and is built using the Arduino f
 
 ## Web Interface
 
+TLDR: Web UI is hosted at https://unrelatedlabs.github.io/Open-tDCS-Stack/gui/
+
+
+
 The web GUI is located in `gui/index.html` and provides:
 
 - Device connection via Web Bluetooth API
@@ -51,18 +60,17 @@ The web GUI is located in `gui/index.html` and provides:
 
 ### Usage
 
-1. Open `gui/index.html` in a Web Bluetooth-compatible browser (Chrome, Edge)
+1. Open in Web Bluetooth-compatible browser (Chrome, Edge). On iOS use the V Browser https://apps.apple.com/us/app/the-v-browser/id6446792641
 2. Click "Connect Device" and select your tDCS device
 3. Configure session parameters (current, duration, ramp time)
 4. Start session and monitor real-time data
-
 
 
 ## Safety Notes
 
 - This is an experimental device for research purposes only
 - Always follow proper tDCS safety protocols
-- Maximum current is limited to 4mA in firmware
+- Maximum current is limited to 4mA in hardware.
 - Device includes impedance monitoring for electrode contact quality
 - Automatic session termination on completion
 
@@ -73,4 +81,4 @@ The web GUI is located in `gui/index.html` and provides:
 ## References
 
 - [Seeed Studio XIAO BLE Documentation](https://wiki.seeedstudio.com/XIAO_BLE/)
-- [Hardware Pinout Details](docs/PINOUT.md)
+ 
