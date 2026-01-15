@@ -2,13 +2,16 @@
 
 const int PIN_PWM = 3;
 const int PIN_ADC_CURRENT = A0;
-const int PIN_ADC_BATTERY = A1;
-const int PIN_ADC_OUTPUT = A2;
+const int PIN_ADC_OUTPUT = A1;
+const int PIN_ADC_BATTERY = A2;
+
 
 const float ADC_REF = 3.3;
 const float ADC_MAX = 1023.0;
-const float RSENSE = 180.0;
-const float VDIV = 6.0;
+const float RSENSE = 1000.0;
+const float VDIV_OUT = 5.7;
+const float VDIV_BAT = 5.7;
+
 const uint16_t PWM_MAX = 1023;  // 10-bit PWM
 const uint16_t CURRENT_MAX_UA = 4000;
 const uint16_t TEST_CURRENT_UA = 50;
@@ -181,8 +184,8 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
 
 void updateMeasurements() {
   float vCurrent = analogRead(PIN_ADC_CURRENT) * ADC_REF / ADC_MAX;
-  float vBattery = analogRead(PIN_ADC_BATTERY) * ADC_REF / ADC_MAX * VDIV;
-  float vOutput = analogRead(PIN_ADC_OUTPUT) * ADC_REF / ADC_MAX * VDIV;
+  float vBattery = analogRead(PIN_ADC_BATTERY) * ADC_REF / ADC_MAX * VDIV_BAT;
+  float vOutput = analogRead(PIN_ADC_OUTPUT) * ADC_REF / ADC_MAX * VDIV_OUT;
   
   float currentA = vCurrent / RSENSE;
   measuredCurrent = (uint16_t)(currentA * 1000000);
@@ -233,7 +236,14 @@ void updateSession() {
 }
 
 void applyPWM(uint16_t currentUA) {
-  uint16_t pwm = (uint32_t)currentUA * PWM_MAX / CURRENT_MAX_UA;
+  if (currentUA == 0) {
+    analogWrite(PIN_PWM, 0);
+    return;
+  }
+  float currentA = currentUA / 1000000.0;
+  float vRsense = currentA * RSENSE;
+  float vPwm = vRsense + 0.7;
+  uint16_t pwm = (uint16_t)(vPwm / ADC_REF * PWM_MAX);
   if (pwm > PWM_MAX) pwm = PWM_MAX;
   analogWrite(PIN_PWM, pwm);
 }

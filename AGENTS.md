@@ -10,48 +10,32 @@ Open Source tDCS
 
 for mental health 
 
-Electronics is xiao BLE sense with nrf52840 + 4x cr2025 battery  + simple current source with pwm + rc filter driving opamp based constant current.
-we also measure voltage and current for measuring electrode impedance and detecting wearing 
+Electronics is xiao BLE sense with nrf52840 + 4x cr2025 battery + BJT current source with pwm + rc filter.
+PWM sets voltage to Vrsense + 0.7V (Vbe) for current control.
 
-so adc has
-- voltage over a 180ohm current sensing resistor for 360mV at 2mA
+adc measures:
+- voltage over 1kΩ current sensing resistor
+- battery voltage via 5.7x divider
+- output voltage via 5.7x divider
 
-- voltage of the battery from a resistor divider 12V divided by 6 for 2V
-
-- voltage from output of current source divided by 6
-
-the diff is electrode voltage
-
-.
+impedance = (Vbat - Vout) / current
 
 arduino sketch controls it over BLE
 
-there is a characteristic with 5x 16 bit 
- - set current 
- - measured current
- - measured battery voltage 
- - measured current source voltage
- - measured impedance
+readings characteristic (5x 16bit): set current, measured current, battery voltage, output voltage, impedance
 
-- there is a characteristic for setting/reading a 16bit second countdown timer. with target current, total time, ramp up time, ramp down time. ( each 16bit)
+timer characteristic (4x 16bit): target current, time remaining, ramp up, ramp down
 
-PWM output dutty cycle controls current with 4mA full output range 
-
-RGB led shows status with Blue for connected and Green for powered and red for session in progress. 
+RGB led: green=powered, blue=connected, red=session active
 
 -
 
-react native app controls it over ble.
+web gui (index.html) controls it over web bluetooth.
 
-it allows starting a session with duration current and ramp setting. there’s is a current and impedance graph 
-+ area for notes
-. full list is displayed in main screen.  with duration time and set current 
-
-there is a chart with date on x and duration on y
-
-there is audio feedback on session end 
-
-session can run in background with live activity displaying the timer 
-
-first build is for ios only. but should be android an mac. compatible too.
-
+features:
+- direct current slider for manual control
+- timed sessions with duration, current, ramp settings
+- live current and impedance graphs
+- session history with expandable graphs
+- notes per session
+- audio feedback on session end
