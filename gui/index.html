@@ -170,7 +170,7 @@
     
     .readings {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1rem;
       text-align: center;
       margin-bottom: 1.5rem;
@@ -243,6 +243,29 @@
 
     .session-meta {
       text-align: right;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+
+    .delete-btn:hover {
+      color: var(--fg);
     }
 
     .session-details {
@@ -284,6 +307,47 @@
     #historyChart {
       height: 200px;
     }
+    
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    input[type="range"] {
+      flex: 1;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--fg);
+      cursor: pointer;
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--fg);
+      border: none;
+      cursor: pointer;
+    }
+    
+    .slider-value {
+      font-size: 1.25rem;
+      min-width: 5rem;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -306,8 +370,12 @@
         
         <div class="readings">
           <div>
+            <div class="reading-value" id="setCurrentReading">0.0</div>
+            <div class="reading-unit">mA set</div>
+          </div>
+          <div>
             <div class="reading-value" id="currentReading">0.0</div>
-            <div class="reading-unit">mA</div>
+            <div class="reading-unit">mA out</div>
           </div>
           <div>
             <div class="reading-value" id="impedanceReading">0</div>
@@ -331,6 +399,14 @@
         <div class="graph-container">
           <div class="graph-label">impedance</div>
           <canvas id="impedanceGraph"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>direct current</label>
+        <div class="slider-row">
+          <input type="range" id="directCurrent" min="0" max="2" step="0.1" value="0">
+          <span class="slider-value" id="directCurrentValue">0.0 mA</span>
         </div>
       </div>
 
@@ -466,10 +542,16 @@
       const sourceVoltage = data.getUint16(6, true) / 1000
       const impedance = data.getUint16(8, true) / 1000
       
+      $('setCurrentReading').textContent = setCurrent.toFixed(1)
       $('currentReading').textContent = measuredCurrent.toFixed(2)
       $('batteryReading').textContent = batteryVoltage.toFixed(1)
       $('voltageReading').textContent = sourceVoltage.toFixed(1)
       $('impedanceReading').textContent = impedance.toFixed(1)
+      
+      if (!sessionActive) {
+        $('directCurrent').value = setCurrent
+        $('directCurrentValue').textContent = `${setCurrent.toFixed(1)} mA`
+      }
       
       currentData.push(measuredCurrent)
       impedanceData.push(impedance)
@@ -505,6 +587,7 @@
           $('startBtn').classList.add('hidden')
           $('stopBtn').classList.remove('hidden')
           $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = true)
+          $('directCurrent').disabled = true
           updateStatus(true, true)
 
           if (!timerInterval) {
@@ -546,6 +629,7 @@
       $('startBtn').classList.add('hidden')
       $('stopBtn').classList.remove('hidden')
       $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = true)
+      $('directCurrent').disabled = true
       
       updateStatus(true, true)
       
@@ -590,6 +674,10 @@
       $('startBtn').classList.remove('hidden')
       $('stopBtn').classList.add('hidden')
       $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = false)
+      $('directCurrent').disabled = false
+      $('directCurrent').value = 0
+      $('directCurrentValue').textContent = '0.0 mA'
+      $('setCurrentReading').textContent = '0.0'
       $('notes').value = ''
       
       updateStatus(!!server?.connected)
@@ -678,12 +766,20 @@
       ctx.fillText((maxVal / 2).toFixed(1), padding.left - 5, padding.top + graphHeight / 2)
       ctx.fillText('0', padding.left - 5, rect.height - padding.bottom)
 
-      // X-axis labels (time in seconds)
+      // X-axis labels (time in minutes)
       const totalSeconds = data.length * 0.5  // 500ms per data point
+      const totalMinutes = totalSeconds / 60
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillText('0s', padding.left, rect.height - padding.bottom + 5)
-      ctx.fillText(`${Math.floor(totalSeconds)}s`, rect.width - padding.right, rect.height - padding.bottom + 5)
+      ctx.fillText('0min', padding.left, rect.height - padding.bottom + 5)
+
+      // Add middle label if duration is long enough
+      if (totalMinutes >= 2) {
+        const midMinutes = (totalMinutes / 2).toFixed(1)
+        ctx.fillText(`${midMinutes}min`, padding.left + graphWidth / 2, rect.height - padding.bottom + 5)
+      }
+
+      ctx.fillText(`${totalMinutes.toFixed(1)}min`, rect.width - padding.right, rect.height - padding.bottom + 5)
 
       // Draw data line
       ctx.strokeStyle = color
@@ -735,6 +831,7 @@
               </div>
               <div class="session-meta">
                 ${s.current} mA
+                <button class="delete-btn" data-session-idx="${idx}" title="Delete session">×</button>
               </div>
             </div>
             ${hasData ? `
@@ -783,6 +880,21 @@
           }
         })
       })
+
+      // Add delete button handlers
+      list.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation() // Prevent expanding the session
+          const idx = parseInt(btn.dataset.sessionIdx)
+
+          if (confirm('Delete this session?')) {
+            sessions.splice(idx, 1)
+            localStorage.setItem('tdcs-sessions', JSON.stringify(sessions))
+            renderSessions()
+            renderHistoryChart()
+          }
+        })
+      })
     }
 
     function renderHistoryChart() {
@@ -813,17 +925,55 @@
         const x = padding + i * (barWidth + 4)
         const h = (s.duration / maxDuration) * (rect.height - 40)
         const y = rect.height - padding - h
-        
+
         ctx.fillStyle = '#1c1917'
         ctx.fillRect(x, y, barWidth, h)
-        
+
+        // Duration label above bar
+        if (h > 20) {
+          ctx.fillStyle = '#a8a29e'
+          ctx.font = '9px IBM Plex Mono'
+          const durationMins = Math.floor(s.duration / 60)
+          ctx.fillText(`${durationMins}m`, x + barWidth / 2, y - 4)
+        }
+
+        // Date label at bottom
         if (last30.length <= 15 || i % 3 === 0) {
           ctx.fillStyle = '#a8a29e'
+          ctx.font = '10px IBM Plex Mono'
           const date = new Date(s.date)
           ctx.fillText(date.getDate(), x + barWidth / 2, rect.height - 4)
         }
       })
     }
+
+    async function setDirectCurrent(value) {
+      if (!controlChar) return
+      
+      const buffer = new ArrayBuffer(8)
+      const view = new DataView(buffer)
+      view.setUint16(0, value * 1000, true)
+      view.setUint16(2, 0, true) // duration 0 = direct mode
+      view.setUint16(4, 0, true)
+      view.setUint16(6, 0, true)
+      
+      try {
+        await controlChar.writeValue(buffer)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    $('directCurrent').addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value)
+      $('directCurrentValue').textContent = `${value.toFixed(1)} mA`
+      $('setCurrentReading').textContent = value.toFixed(1)
+    })
+    
+    $('directCurrent').addEventListener('change', (e) => {
+      const value = parseFloat(e.target.value)
+      setDirectCurrent(value)
+    })
 
     $('connectBtn').addEventListener('click', connect)
     $('startBtn').addEventListener('click', startSession)
