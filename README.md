@@ -10,9 +10,8 @@ Open-tDCS-Stack is a Bluetooth-enabled tDCS device that provides precise current
 
 - **Microcontroller**: Seeed Studio XIAO BLE nRF52840
 - **Connectivity**: Bluetooth 5.0 (BLE)
-- **Current Range**: 0-4mA (configurable)
-- **Battery**: 4x CR2025
-
+- **Current Range**: 0-2.5mA (configurable)
+- **Battery**: 3.7V LiPo
 
 
 ### Schematics 
@@ -26,16 +25,17 @@ The firmware is located in `firmware/build/opentdcs.ino.uf2`
 To install on the XIAO BLE nRF52840. Place it into bootloader mode by quickly pressing the reset button twice. 
 A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opentdcs.ino.uf2` file. Done
 
+(the UF2 file could be out of date. Please run `build.sh` in the `firmware` folder for an up to date build.)
 
 ### Features
 
 - Real-time current monitoring and control
-- Battery voltage monitoring
+- Battery voltage monitoring (TODO)
 - Impedance calculation
 - Configurable session parameters (duration, ramp up/down)
 - BLE GATT service for wireless control
 - Visual status indication via RGB LED
-- Dickson charge pump voltage multiplier for higher output voltage
+- Dickson charge pump voltage multiplier for 12V compliance voltage
 - Test current (50µA) applied when connected but not in session
 
 ### Pin Usage
@@ -45,7 +45,7 @@ A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opent
 | PWM Output | D10 | Current control signal |
 | Current Sense | A0 | Measures output current via 1kΩ sense resistor |
 | Output Voltage | A1 | Output voltage monitoring (5.3x divider) |
-| Battery Voltage | A2 | Battery monitoring (5.3x divider) |
+| Compliance Voltage | A2 | 12V monitoring (5.3x divider) |
 | Multiplier A1 | D9 | Dickson charge pump driver |
 | Multiplier B | D8 | Dickson charge pump driver (inverted) |
 | Multiplier A2 | D7 | Dickson charge pump driver |
