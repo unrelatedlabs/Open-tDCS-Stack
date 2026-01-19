@@ -35,15 +35,28 @@ A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opent
 - Configurable session parameters (duration, ramp up/down)
 - BLE GATT service for wireless control
 - Visual status indication via RGB LED
+- Dickson charge pump voltage multiplier for higher output voltage
+- Test current (50µA) applied when connected but not in session
 
 ### Pin Usage
 
 | Function | Pin | Description |
 |----------|-----|-------------|
-| PWM Output | D3 (P0.29) | Current control signal |
-| Current Sense | A0 (P0.02) | Measures output current |
-| Battery Voltage | A1 (P0.03) | Battery monitoring |
-| Output Voltage | A2 (P0.28) | Output voltage monitoring |
+| PWM Output | D10 | Current control signal |
+| Current Sense | A0 | Measures output current via 1kΩ sense resistor |
+| Output Voltage | A1 | Output voltage monitoring (5.3x divider) |
+| Battery Voltage | A2 | Battery monitoring (5.3x divider) |
+| Multiplier A1 | D9 | Dickson charge pump driver |
+| Multiplier B | D8 | Dickson charge pump driver (inverted) |
+| Multiplier A2 | D7 | Dickson charge pump driver |
+
+### LED Status
+
+| State | Color | Pattern |
+|-------|-------|---------|
+| Idle/Advertising | Green | Blink (50ms every 4s) |
+| Connected | Blue | Solid |
+| Session Active | Red | Solid |
 
 ## Web Interface
 

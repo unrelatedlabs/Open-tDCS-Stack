@@ -405,7 +405,7 @@
       <div class="card">
         <label>direct current</label>
         <div class="slider-row">
-          <input type="range" id="directCurrent" min="0" max="2" step="0.1" value="0">
+          <input type="range" id="directCurrent" min="0" max="3" step="0.1" value="0">
           <span class="slider-value" id="directCurrentValue">0.0 mA</span>
         </div>
       </div>
@@ -414,7 +414,7 @@
         <div class="row">
           <div>
             <label>current (mA)</label>
-            <input type="number" id="targetCurrent" value="2.0" min="0" max="2" step="0.1">
+            <input type="number" id="targetCurrent" value="2.0" min="0" max="3" step="0.1">
           </div>
           <div>
             <label>duration (min)</label>
@@ -548,10 +548,6 @@
       $('voltageReading').textContent = sourceVoltage.toFixed(1)
       $('impedanceReading').textContent = impedance.toFixed(1)
       
-      if (!sessionActive) {
-        $('directCurrent').value = setCurrent
-        $('directCurrentValue').textContent = `${setCurrent.toFixed(1)} mA`
-      }
       
       currentData.push(measuredCurrent)
       impedanceData.push(impedance)
@@ -587,7 +583,6 @@
           $('startBtn').classList.add('hidden')
           $('stopBtn').classList.remove('hidden')
           $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = true)
-          $('directCurrent').disabled = true
           updateStatus(true, true)
 
           if (!timerInterval) {
@@ -629,7 +624,6 @@
       $('startBtn').classList.add('hidden')
       $('stopBtn').classList.remove('hidden')
       $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = true)
-      $('directCurrent').disabled = true
       
       updateStatus(true, true)
       
@@ -674,10 +668,6 @@
       $('startBtn').classList.remove('hidden')
       $('stopBtn').classList.add('hidden')
       $('controlCard').querySelectorAll('input, textarea').forEach(el => el.disabled = false)
-      $('directCurrent').disabled = false
-      $('directCurrent').value = 0
-      $('directCurrentValue').textContent = '0.0 mA'
-      $('setCurrentReading').textContent = '0.0'
       $('notes').value = ''
       
       updateStatus(!!server?.connected)
@@ -949,14 +939,14 @@
 
     async function setDirectCurrent(value) {
       if (!controlChar) return
-      
+
       const buffer = new ArrayBuffer(8)
       const view = new DataView(buffer)
       view.setUint16(0, value * 1000, true)
-      view.setUint16(2, 0, true) // duration 0 = direct mode
-      view.setUint16(4, 0, true)
+      view.setUint16(2, value > 0 ? 3600 : 0, true) // 1 hour duration
+      view.setUint16(4, 0, true) // no ramp
       view.setUint16(6, 0, true)
-      
+
       try {
         await controlChar.writeValue(buffer)
       } catch (e) {

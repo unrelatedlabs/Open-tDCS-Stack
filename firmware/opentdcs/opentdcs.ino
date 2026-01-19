@@ -1,18 +1,29 @@
 #include <bluefruit.h>
+#include <HardwarePWM.h>
 
-const int PIN_PWM = 3;
+const int PIN_PWM = 10;
 const int PIN_ADC_CURRENT = A0;
 const int PIN_ADC_OUTPUT = A1;
 const int PIN_ADC_BATTERY = A2;
 
+// Dickson multiplier pins
+const int PIN_MULT_A1 = 9;   // D9 - drives with D7
+const int PIN_MULT_B = 8;    // D8 - inverted
+const int PIN_MULT_A2 = 7;   // D7 - drives with D9
+
+// Dixon Multiplier PWM: 50% duty cycle
+const uint16_t MULT_TOP = 32;    // PWM period 
+const uint16_t MULT_DUTY = MULT_TOP/2;    // 50% duty
+
+volatile bool multiplierEnabled = false;
 
 const float ADC_REF = 3.3;
 const float ADC_MAX = 1023.0;
 const float RSENSE = 1000.0;
-const float VDIV_OUT = 5.7;
-const float VDIV_BAT = 5.7;
+const float VDIV_OUT = 5.3;
+const float VDIV_BAT = 5.3;
 
-const uint16_t PWM_MAX = 1023;  // 10-bit PWM
+const uint16_t PWM_MAX = 255;  // 8-bit PWM
 const uint16_t CURRENT_MAX_UA = 4000;
 const uint16_t TEST_CURRENT_UA = 50;
 
@@ -35,20 +46,29 @@ uint8_t lastLedState = 0;  // 0=off, 1=green, 2=blue, 3=red
 
 SoftwareTimer rampTimer;
 SoftwareTimer measurementTimer;
+SoftwareTimer blinkTimer;
 
 BLEService tdcsService("a1b2c3d4-1234-5678-abcd-ef0123456789");
 BLECharacteristic measChar("a1b2c3d5-1234-5678-abcd-ef0123456789", BLERead | BLENotify, 10);
 BLECharacteristic timerChar("a1b2c3d6-1234-5678-abcd-ef0123456789", BLERead | BLEWrite | BLENotify, 8);
+
+// Ownership token for HwPWM3 (any non-zero value)
+#define MULT_PWM_TOKEN 0x4D554C54  // "MULT"
 
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);  // Wait up to 3s for serial
   Serial.println("Open-tDCS-Stack Starting...");
 
-  // Configure PWM: 10-bit resolution, ~15.6kHz frequency (16MHz / 1024)
-  analogWriteResolution(10);
+  // Reserve HwPWM3 for multiplier before analogWrite can claim it
+  HwPWM3.takeOwnership(MULT_PWM_TOKEN);
+
+  // Configure PWM: 8-bit resolution, ~62.5kHz frequency (16MHz / 256)
+  analogWriteResolution(8);
   pinMode(PIN_PWM, OUTPUT);
-  analogWrite(PIN_PWM, 0);
+  analogWrite(PIN_PWM, 0);  // Will use HwPWM0/1/2, not HwPWM3
+
+  // Dickson multiplier pins use HwPWM3 (reserved above)
 
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -70,13 +90,18 @@ void setup() {
   timerChar.begin();
   
   startAdv();
-  ledGreen();
 
   rampTimer.begin(20, rampCallback);
   // rampTimer starts only during sessions
 
   measurementTimer.begin(500, measurementCallback);
   measurementTimer.start();
+
+  // Blink timer for idle state (50ms LED on)
+  blinkTimer.begin(50, blinkOffCallback, NULL, false);  // one-shot (repeating=false)
+
+  // Multiplier starts off, enabled when connected or session active
+  updateLED();
 
   Serial.println("Initialization complete. Advertising...");
 
@@ -87,6 +112,51 @@ void loop() {}
 
 void rampCallback(TimerHandle_t _handle) {
   updateSession();
+}
+
+void blinkOffCallback(TimerHandle_t _handle) {
+  ledOff();  // Turn off LED after 50ms blink
+}
+
+void multiplierOn() {
+  if (multiplierEnabled) return;
+  multiplierEnabled = true;
+  
+  // Configure HwPWM3 for multiplier
+  HwPWM3.setMaxValue(MULT_TOP);
+  HwPWM3.addPin(PIN_MULT_A1);
+  HwPWM3.addPin(PIN_MULT_B);
+  HwPWM3.addPin(PIN_MULT_A2);
+  
+  // Write PWM values: D9/D7 normal, D8 inverted
+  HwPWM3.writePin(PIN_MULT_A1, MULT_DUTY, false);  // D9 - normal
+  HwPWM3.writePin(PIN_MULT_B,  MULT_DUTY, true);   // D8 - inverted
+  HwPWM3.writePin(PIN_MULT_A2, MULT_DUTY, false);  // D7 - normal
+  
+  // Enable high drive on all pins after PWM is running
+  pinMode(PIN_MULT_A1, OUTPUT_H0H1);
+  pinMode(PIN_MULT_B,  OUTPUT_H0H1);
+  pinMode(PIN_MULT_A2, OUTPUT_H0H1);
+  
+  Serial.println("Multiplier ON (HwPWM3, 50% duty, D8 inverted, high drive)");
+}
+
+void multiplierOff() {
+  if (!multiplierEnabled) return;
+  multiplierEnabled = false;
+  
+  // Set duty to 0 (outputs go low)
+  HwPWM3.writePin(PIN_MULT_A1, 0, false);
+  HwPWM3.writePin(PIN_MULT_B,  0, false);
+  HwPWM3.writePin(PIN_MULT_A2, 0, false);
+  
+  // Remove pins and stop
+  HwPWM3.removePin(PIN_MULT_A1);
+  HwPWM3.removePin(PIN_MULT_B);
+  HwPWM3.removePin(PIN_MULT_A2);
+  HwPWM3.stop();
+  
+  Serial.println("Multiplier OFF");
 }
 
 void measurementCallback(TimerHandle_t _handle) {
@@ -138,6 +208,7 @@ void startAdv() {
 void onConnect(uint16_t conn) {
   isConnected = true;
   Serial.println("BLE Connected");
+  multiplierOn();
   updateLED();
 }
 
@@ -146,6 +217,9 @@ void onDisconnect(uint16_t conn, uint8_t reason) {
   Serial.print("BLE Disconnected. Reason: ");
   Serial.println(reason);
   Bluefruit.Advertising.start(0);
+  if (!sessionActive) {
+    multiplierOff();
+  }
   updateLED();
 }
 
@@ -160,6 +234,7 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
       timeRemaining = totalTime;
       sessionStart = millis();
       sessionActive = true;
+      multiplierOn();  // Ensure multiplier is on for session
       rampTimer.start();
       updateLED();
       Serial.print("Session START: ");
@@ -176,6 +251,9 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
       setCurrent = 0;
       rampTimer.stop();
       applyPWM(0);
+      if (!isConnected) {
+        multiplierOff();
+      }
       updateLED();
       Serial.println("Session STOP");
     }
@@ -215,6 +293,9 @@ void updateSession() {
       setCurrent = 0;
       rampTimer.stop();
       applyPWM(0);
+      if (!isConnected) {
+        multiplierOff();
+      }
       updateLED();
       Serial.println("Session COMPLETE");
       return;
@@ -246,6 +327,7 @@ void applyPWM(uint16_t currentUA) {
   uint16_t pwm = (uint16_t)(vPwm / ADC_REF * PWM_MAX);
   if (pwm > PWM_MAX) pwm = PWM_MAX;
   analogWrite(PIN_PWM, pwm);
+  pinMode(PIN_PWM, OUTPUT_H0H1);
 }
 
 void updateBLE() {
@@ -274,18 +356,32 @@ void updateBLE() {
   timerChar.notify(timer, 8);
 }
 
+static unsigned long lastBlinkTime = 0;
+
 void updateLED() {
   uint8_t newState;
-  if (sessionActive) newState = 3;  // red
-  else if (isConnected) newState = 2;  // blue
-  else newState = 1;  // green
+  if (sessionActive) newState = 3;  // red (solid)
+  else if (isConnected) newState = 2;  // blue (solid)
+  else newState = 1;  // green (blinking)
 
   if (newState != lastLedState) {
     ledOff();
+    blinkTimer.stop();
     if (newState == 3) ledRed();
     else if (newState == 2) ledBlue();
-    else ledGreen();
+    // Green handled by blinking below
     lastLedState = newState;
+    lastBlinkTime = 0;  // Reset blink timing
+  }
+
+  // Handle green blinking in idle state (50ms on every 4s)
+  if (newState == 1) {
+    unsigned long now = millis();
+    if (now - lastBlinkTime >= 4000) {
+      lastBlinkTime = now;
+      ledGreen();
+      blinkTimer.start();  // Turn off after 50ms
+    }
   }
 }
 
