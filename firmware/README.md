@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: CC-BY-SA-4.0
+Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+-->
+
 # Open-tDCS-Stack Firmware
 
 Firmware for the Seeed Studio XIAO BLE nRF52840 microcontroller.

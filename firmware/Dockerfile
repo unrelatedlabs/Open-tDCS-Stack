@@ -1,3 +1,7 @@
+# OpenTDCS Build Container
+# Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 FROM ubuntu:22.04
 
 # Install dependencies

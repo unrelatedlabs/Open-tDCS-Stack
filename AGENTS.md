@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: CC-BY-SA-4.0
+Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+-->
+
 The code should be minimal, as simple and readable as it gets. no verbose comments. code is the documentation.
 
 UI is simple and light. calm and spacey. zen but not tacky

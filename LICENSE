@@ -1,0 +1,51 @@
+# OpenTDCS Licensing
+
+This project uses a multi-license approach to ensure openness while maintaining
+appropriate protections for different types of content.
+
+## Hardware Designs — CERN-OHL-S-2.0
+
+**License:** CERN Open Hardware Licence Version 2 - Strongly Reciprocal
+
+**SPDX Identifier:** `CERN-OHL-S-2.0`
+
+**Applies to:**
+- Schematics (`docs/schematics.png`)
+- 3D models and mechanical designs (`3d/` directory)
+- PCB layouts and hardware documentation
+
+**Full text:** See [`LICENSES/CERN-OHL-S-2.0.txt`](LICENSES/CERN-OHL-S-2.0.txt)
+
+## Software and Firmware — GPL-3.0
+
+**License:** GNU General Public License v3.0
+
+**SPDX Identifier:** `GPL-3.0-or-later`
+
+**Applies to:**
+- Firmware source code (`firmware/` directory)
+- Web GUI application (`gui/` directory)
+- Build scripts and tooling
+
+**Full text:** See [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt)
+
+## Documentation — CC-BY-SA-4.0
+
+**License:** Creative Commons Attribution-ShareAlike 4.0 International
+
+**SPDX Identifier:** `CC-BY-SA-4.0`
+
+**Applies to:**
+- README files
+- Technical documentation (`TECHNICAL_DETAILS.md`)
+- User guides and written content
+- Photographs and diagrams (unless otherwise noted)
+
+**Full text:** See [`LICENSES/CC-BY-SA-4.0.txt`](LICENSES/CC-BY-SA-4.0.txt)
+
+---
+
+Copyright © 2024-2026 Peter Kuhar and OpenTDCS Contributors
+
+When using, modifying, or distributing any part of this project, please ensure
+you comply with the appropriate license for the type of content you are working with.

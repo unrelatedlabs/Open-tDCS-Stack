@@ -1,3 +1,22 @@
+<!--
+  OpenTDCS Web GUI
+  Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -348,6 +367,49 @@
       min-width: 5rem;
       text-align: right;
     }
+
+    footer {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem 3rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-align: center;
+    }
+
+    .link { color: inherit; text-decoration: underline; cursor: pointer; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 1000;
+    }
+
+    .modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      max-width: 640px;
+      width: 100%;
+      padding: 1.5rem;
+      line-height: 1.5;
+    }
+
+    .modal-card h2 {
+      font-weight: 300;
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .modal-card p { margin-bottom: 0.5rem; }
+
+    .modal-actions { display: flex; gap: 1rem; margin-top: 1rem; justify-content: flex-end; }
   </style>
 </head>
 <body>
@@ -450,6 +512,45 @@
         </ul>
       </div>
     </section>
+  </div>
+
+  <footer>
+    <span>Not a medical device.</span>
+    <span><a id="openDisclaimer" class="link">disclaimer</a></span>
+    <span><a id="openSources" class="link">sources</a></span>
+  </footer>
+
+  <div id="disclaimerModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2>⚠️ Safety Warning</h2>
+      <p><strong>This is not a certified medical device.</strong> Incorrect assembly, wiring, or electrode setup can cause dangerous current delivery, leading to <strong>skin burns/lesions</strong>, unintended stimulation effects, equipment failure, or electric shock.</p>
+      <p>tDCS/tES should only be performed with <strong>medical-grade, certified equipment</strong> and appropriate screening/supervision—<strong>do not use DIY devices or unvalidated protocols on a person</strong>.</p>
+      <p style="margin-top:0.75rem; font-size:0.85em;">Do not use with medical implants or health conditions. Consult a clinician before any human use. Do not use on minors. Stop on discomfort.</p>
+      <div class="modal-actions">
+        <button id="dismissDisclaimer" class="primary">I understand</button>
+        <a href="../DISCLAIMER.md" target="_blank"><button>Full disclaimer</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div id="sourcesModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2>Sources</h2>
+      <p style="font-size:0.85em; line-height:1.8;">
+        <a href="https://www.neurofyziologie.cz/doc/IFCNinfo/Using_tES_devices_as_DIY_FINAL_13Dec15.pdf" target="_blank">IFCN (2015) "tES in DIY applications"</a><br>
+        <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6050584/" target="_blank">Wurzman et al. (2016) "Open letter on DIY tDCS"</a><br>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/23733050/" target="_blank">Fitz & Reiner (2015) "Policy for DIY brain stimulation"</a><br>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/27372845/" target="_blank">Bikson et al. (2016) "Safety of tDCS"</a><br>
+        <a href="https://www.ifcn.info/UserFiles/file/CLINPH-S-25-01153_Targeted-Safety-Guidelines-update-Oct-2025.pdf" target="_blank">IFCN (2025) "Safety guidelines update"</a><br>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/20923600/" target="_blank">Loo et al. (2011) "Avoiding skin burns"</a><br>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/25073936/" target="_blank">Rodríguez et al. (2014) "Skin lesions from tDCS"</a><br>
+        <a href="https://www.tmslab.org/publications/532.pdf" target="_blank">"Skin Lesions Induced by tDCS" (PDF)</a><br>
+        <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6166027/" target="_blank">Chao et al. (2018) "Hypomania from tDCS"</a>
+      </p>
+      <div class="modal-actions">
+        <button id="dismissSources" class="primary">Close</button>
+      </div>
+    </div>
   </div>
 
   <audio id="endSound" preload="auto">
@@ -971,6 +1072,22 @@
 
     renderSessions()
     renderHistoryChart()
+    
+    function showDisclaimer(force = false) {
+      if (!force && localStorage.getItem('tdcs-disclaimer-ack') === '1') return
+      $('disclaimerModal').classList.remove('hidden')
+    }
+
+    $('openDisclaimer').addEventListener('click', () => showDisclaimer(true))
+    $('dismissDisclaimer').addEventListener('click', () => {
+      localStorage.setItem('tdcs-disclaimer-ack', '1')
+      $('disclaimerModal').classList.add('hidden')
+    })
+
+    $('openSources').addEventListener('click', () => $('sourcesModal').classList.remove('hidden'))
+    $('dismissSources').addEventListener('click', () => $('sourcesModal').classList.add('hidden'))
+
+    document.addEventListener('DOMContentLoaded', () => showDisclaimer(false))
     
     window.addEventListener('resize', () => {
       renderHistoryChart()

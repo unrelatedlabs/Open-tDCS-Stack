@@ -1,6 +1,37 @@
+<!--
+SPDX-License-Identifier: CC-BY-SA-4.0
+Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+-->
+
 # Open-tDCS-Stack
 
 Open-source transcranial Direct Current Stimulation (tDCS) device using the Seeed Studio XIAO BLE nRF52840.
+
+> Disclaimer: This is not a medical device. See `DISCLAIMER.md`.
+
+## ⚠️ Safety Warning (tDCS / tES)
+
+This open-source project is **not a certified medical device**. **Incorrect assembly, wiring, or electrode setup can cause dangerous current delivery**, leading to **skin burns/lesions**, unintended stimulation effects, equipment failure, or electric shock. tDCS/tES should only be performed with **medical-grade, certified equipment** and appropriate screening/supervision—**do not use DIY devices or unvalidated protocols on a person**.
+
+### Sources
+- IFCN (2015) "Transcranial electric stimulation in do-it-yourself applications" (PDF):  
+  https://www.neurofyziologie.cz/doc/IFCNinfo/Using_tES_devices_as_DIY_FINAL_13Dec15.pdf
+- Wurzman et al. (2016) "An open letter concerning do-it-yourself users of tDCS" (free full text, PMC):  
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC6050584/
+- Fitz & Reiner (2015) "The challenge of crafting policy for do-it-yourself brain stimulation" (PubMed):  
+  https://pubmed.ncbi.nlm.nih.gov/23733050/
+- Bikson et al. (2016) "Safety of tDCS: Evidence-based update" (PubMed):  
+  https://pubmed.ncbi.nlm.nih.gov/27372845/
+- IFCN (Oct 2025) "Low intensity transcranial electric stimulation: Safety… guidelines 2017–2025 update" (PDF):  
+  https://www.ifcn.info/UserFiles/file/CLINPH-S-25-01153_Targeted-Safety-Guidelines-update-Oct-2025.pdf
+- Loo et al. (2011) "Avoiding skin burns with tDCS" (PubMed):  
+  https://pubmed.ncbi.nlm.nih.gov/20923600/
+- Rodríguez et al. (2014) "Skin lesions induced by tDCS" (PubMed):  
+  https://pubmed.ncbi.nlm.nih.gov/25073936/
+- "Skin Lesions Induced by tDCS" (PDF letter):  
+  https://www.tmslab.org/publications/532.pdf
+- Chao et al. (2018) "Hypomania induced by bifrontal tDCS" (free full text, PMC):  
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC6166027/
 
 ## Overview
 
@@ -88,9 +119,19 @@ The web GUI is located in `gui/index.html` and provides:
 - Device includes impedance monitoring for electrode contact quality
 - Automatic session termination on completion
 
+Read the full disclaimer in `DISCLAIMER.md` before use.
+
 ## License
 
-[License information to be added]
+This project uses a multi-license approach:
+
+| Component | License | SPDX Identifier |
+|-----------|---------|-----------------|
+| Hardware designs (schematics, 3D models) | [CERN-OHL-S-2.0](LICENSES/CERN-OHL-S-2.0.txt) | `CERN-OHL-S-2.0` |
+| Software & firmware | [GPL-3.0](LICENSES/GPL-3.0.txt) | `GPL-3.0-or-later` |
+| Documentation | [CC-BY-SA-4.0](LICENSES/CC-BY-SA-4.0.txt) | `CC-BY-SA-4.0` |
+
+See [LICENSE](LICENSE) for full details.
 
 ## References
 

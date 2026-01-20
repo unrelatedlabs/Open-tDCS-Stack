@@ -1,4 +1,8 @@
 #!/bin/bash
+# OpenTDCS Build Script
+# Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -e
 
 # Change to script directory
