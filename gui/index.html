@@ -187,17 +187,31 @@
       margin-top: 1.5rem;
     }
     
-    .readings {
+    .readings-primary {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    
+    .readings-primary .reading-value {
+      font-size: 1.5rem;
+      font-weight: 400;
+    }
+    
+    .readings-secondary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       text-align: center;
       margin-bottom: 1.5rem;
+      opacity: 0.6;
     }
     
-    .reading-value {
-      font-size: 1.5rem;
-      font-weight: 400;
+    .readings-secondary .reading-value {
+      font-size: 1rem;
+      font-weight: 300;
     }
     
     .reading-unit {
@@ -430,25 +444,35 @@
       <div class="card">
         <div class="timer" id="timer">00:00</div>
         
-        <div class="readings">
+        <div class="readings-primary">
           <div>
             <div class="reading-value" id="setCurrentReading">0.0</div>
             <div class="reading-unit">mA set</div>
           </div>
           <div>
             <div class="reading-value" id="currentReading">0.0</div>
-            <div class="reading-unit">mA out</div>
+            <div class="reading-unit">mA meas</div>
+          </div>
+          <div>
+            <div class="reading-value" id="electrodeVoltageReading">0</div>
+            <div class="reading-unit">V elec</div>
           </div>
           <div>
             <div class="reading-value" id="impedanceReading">0</div>
             <div class="reading-unit">kΩ</div>
           </div>
+        </div>
+        <div class="readings-secondary">
           <div>
-            <div class="reading-value" id="batteryReading">0</div>
-            <div class="reading-unit">V bat</div>
+            <div class="reading-value" id="lipoReading">0</div>
+            <div class="reading-unit">V lipo</div>
           </div>
           <div>
-            <div class="reading-value" id="voltageReading">0</div>
+            <div class="reading-value" id="complianceReading">0</div>
+            <div class="reading-unit">V comp</div>
+          </div>
+          <div>
+            <div class="reading-value" id="outputReading">0</div>
             <div class="reading-unit">V out</div>
           </div>
         </div>
@@ -467,7 +491,7 @@
       <div class="card">
         <label>direct current</label>
         <div class="slider-row">
-          <input type="range" id="directCurrent" min="0" max="3" step="0.1" value="0">
+          <input type="range" id="directCurrent" min="0" max="4" step="0.1" value="0">
           <span class="slider-value" id="directCurrentValue">0.0 mA</span>
         </div>
       </div>
@@ -639,15 +663,20 @@
       
       const setCurrent = data.getUint16(0, true) / 1000
       const measuredCurrent = data.getUint16(2, true) / 1000
-      const batteryVoltage = data.getUint16(4, true) / 1000
-      const sourceVoltage = data.getUint16(6, true) / 1000
+      const complianceVoltage = data.getUint16(4, true) / 1000
+      const outputVoltage = data.getUint16(6, true) / 1000
       const impedance = data.getUint16(8, true) / 1000
+      const lipoVoltage = data.byteLength >= 12 ? data.getUint16(10, true) / 1000 : 0
+      const electrodeVoltage = complianceVoltage - outputVoltage
       
       $('setCurrentReading').textContent = setCurrent.toFixed(1)
       $('currentReading').textContent = measuredCurrent.toFixed(2)
-      $('batteryReading').textContent = batteryVoltage.toFixed(1)
-      $('voltageReading').textContent = sourceVoltage.toFixed(1)
+      $('electrodeVoltageReading').textContent = electrodeVoltage.toFixed(1)
       $('impedanceReading').textContent = impedance.toFixed(1)
+      
+      $('lipoReading').textContent = lipoVoltage.toFixed(2)
+      $('complianceReading').textContent = complianceVoltage.toFixed(1)
+      $('outputReading').textContent = outputVoltage.toFixed(1)
       
       
       currentData.push(measuredCurrent)

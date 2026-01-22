@@ -14,12 +14,13 @@ Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
 
 **Measurement Characteristic** (Read, Notify)
 UUID: `a1b2c3d5-1234-5678-abcd-ef0123456789`
-Data format (10 bytes):
+Data format (12 bytes):
 - Bytes 0-1: Set current (µA, little-endian uint16)
 - Bytes 2-3: Measured current (µA, little-endian uint16)
-- Bytes 4-5: Battery voltage (mV, little-endian uint16)
+- Bytes 4-5: Compliance voltage (mV, little-endian uint16)
 - Bytes 6-7: Output voltage (mV, little-endian uint16)
 - Bytes 8-9: Impedance (Ω, little-endian uint16, 0xFFFF if current < 10µA)
+- Bytes 10-11: LiPo battery voltage (mV, little-endian uint16)
 
 **Timer Characteristic** (Read, Write, Notify)
 UUID: `a1b2c3d6-1234-5678-abcd-ef0123456789`
@@ -47,9 +48,34 @@ To stop a session, write with totalTime=0 or targetCurrent=0.
 | PWM Resolution | 8-bit | 0-255 range |
 | Sense Resistor | 1kΩ | Current measurement resistor |
 | Output Voltage Divider | 5.3x | For measuring boosted output |
-| Battery Voltage Divider | 5.3x | For battery monitoring |
+| Compliance Voltage Divider | 5.3x | For compliance voltage monitoring |
+| LiPo Voltage Divider | 2.96x | 1M/510k divider, GPIO-enabled via P0.14 |
 | Max Current | 4000µA | Hardware-limited maximum |
 | Test Current | 50µA | Applied when connected, not in session |
+
+## LiPo Battery Measurement
+
+The XIAO BLE's LiPo battery is measured via a GPIO-enabled voltage divider:
+- P0.31 (AIN7): ADC input
+- P0.14: Pull-down enable (set LOW to enable divider, INPUT to disable)
+- Divider: 1MΩ high-side, 510kΩ low-side (2.96x ratio)
+
+The divider is normally disabled (P0.14 high-Z) to minimize battery drain. During measurement, P0.14 is set LOW briefly to complete the circuit.
+
+## Voltage Measurements
+
+The device measures and reports multiple voltages:
+
+| Voltage | Source | Description |
+|---------|--------|-------------|
+| V compliance | A2 (5.3x divider) | Dickson charge pump output (~12V) |
+| V output | A1 (5.3x divider) | Voltage at current source output |
+| V lipo | P0.31 (2.96x divider) | XIAO LiPo battery voltage |
+| V electrode | Calculated | V compliance - V output (voltage across electrodes) |
+
+**Derived values:**
+- Electrode voltage: `V_electrode = V_compliance - V_output`
+- Electrode impedance: `R_electrode = V_electrode / I_measured`
 
 ## Dickson Charge Pump
 

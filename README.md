@@ -61,8 +61,8 @@ A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opent
 ### Features
 
 - Real-time current monitoring and control
-- Battery voltage monitoring (TODO)
-- Impedance calculation
+- Voltage monitoring: LiPo, compliance, output, electrode
+- Electrode impedance calculation
 - Configurable session parameters (duration, ramp up/down)
 - BLE GATT service for wireless control
 - Visual status indication via RGB LED
@@ -77,6 +77,8 @@ A XIAO USB drive will appear on your computer. Drag in the `firmware/build/opent
 | Current Sense | A0 | Measures output current via 1kΩ sense resistor |
 | Output Voltage | A1 | Output voltage monitoring (5.3x divider) |
 | Compliance Voltage | A2 | 12V monitoring (5.3x divider) |
+| LiPo ADC | P0.31 | LiPo battery voltage (AIN7, 2.96x divider) |
+| LiPo Enable | P0.14 | Pull-down to enable LiPo voltage divider |
 | Multiplier A1 | D9 | Dickson charge pump driver |
 | Multiplier B | D8 | Dickson charge pump driver (inverted) |
 | Multiplier A2 | D7 | Dickson charge pump driver |
@@ -101,7 +103,18 @@ The web GUI is located in `gui/index.html` and provides:
 - Session control and monitoring
 - Real-time current and impedance graphs
 - Session history tracking
-- Battery and voltage monitoring
+
+### Readings Display
+
+**Primary (large):**
+- I set / I measured (mA)
+- V electrode (compliance - output voltage)
+- R electrode (kΩ impedance)
+
+**Secondary (small):**
+- V lipo (battery)
+- V compliance (Dickson output)
+- V output
 
 ### Usage
 

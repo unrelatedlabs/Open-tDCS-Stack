@@ -26,13 +26,17 @@ const int PIN_ADC_CURRENT = A0;
 const int PIN_ADC_OUTPUT = A1;
 const int PIN_ADC_BATTERY = A2;
 
+// LiPo battery measurement (XIAO internal)
+const int PIN_LIPO_ENABLE = 14;  // P0.14 pull-down to enable divider
+// P0.31 = AIN7, read via nRF52 SAADC directly
+
 // Dickson multiplier pins
 const int PIN_MULT_A1 = 9;   // D9 - drives with D7
 const int PIN_MULT_B = 8;    // D8 - inverted
 const int PIN_MULT_A2 = 7;   // D7 - drives with D9
 
 // Dixon Multiplier PWM: 50% duty cycle
-const uint16_t MULT_TOP = 32;    // PWM period 
+const uint16_t MULT_TOP = 16;    // PWM period 
 const uint16_t MULT_DUTY = MULT_TOP/2;    // 50% duty
 
 volatile bool multiplierEnabled = false;
@@ -40,8 +44,11 @@ volatile bool multiplierEnabled = false;
 const float ADC_REF = 3.3;
 const float ADC_MAX = 1023.0;
 const float RSENSE = 1000.0;
+const float RBASE = 5000.0;    // base resistor
+const float VBE = 0.7;         // base-emitter voltage
 const float VDIV_OUT = 5.3;
 const float VDIV_BAT = 5.3;
+const float VDIV_LIPO = 2.96;  // (1M + 510k) / 510k
 
 const uint16_t PWM_MAX = 255;  // 8-bit PWM
 const uint16_t CURRENT_MAX_UA = 4000;
@@ -60,6 +67,7 @@ uint16_t batteryVoltage = 0;
 uint16_t outputVoltage = 0;
 uint16_t impedance = 0;
 uint16_t setCurrent = 0;
+uint16_t lipoVoltage = 0;
 
 volatile bool isConnected = false;
 uint8_t lastLedState = 0;  // 0=off, 1=green, 2=blue, 3=red
@@ -69,7 +77,7 @@ SoftwareTimer measurementTimer;
 SoftwareTimer blinkTimer;
 
 BLEService tdcsService("a1b2c3d4-1234-5678-abcd-ef0123456789");
-BLECharacteristic measChar("a1b2c3d5-1234-5678-abcd-ef0123456789", BLERead | BLENotify, 10);
+BLECharacteristic measChar("a1b2c3d5-1234-5678-abcd-ef0123456789", BLERead | BLENotify, 12);
 BLECharacteristic timerChar("a1b2c3d6-1234-5678-abcd-ef0123456789", BLERead | BLEWrite | BLENotify, 8);
 
 // Ownership token for HwPWM3 (any non-zero value)
@@ -96,6 +104,9 @@ void setup() {
   ledOff();
 
   analogReadResolution(10);
+
+  // LiPo measurement enable pin - start disabled (high-Z)
+  pinMode(PIN_LIPO_ENABLE, INPUT);
 
   Bluefruit.begin();
   Bluefruit.autoConnLed(false);  // Disable automatic LED control
@@ -206,6 +217,8 @@ void measurementCallback(TimerHandle_t _handle) {
     Serial.print(batteryVoltage);
     Serial.print("mV Vout:");
     Serial.print(outputVoltage);
+    Serial.print("mV Vlipo:");
+    Serial.print(lipoVoltage);
     Serial.print("mV");
     if (sessionActive) {
       Serial.print(" T-");
@@ -241,6 +254,42 @@ void onDisconnect(uint16_t conn, uint8_t reason) {
     multiplierOff();
   }
   updateLED();
+}
+
+uint16_t readAIN7() {
+  // Read P0.31 (AIN7) using nRF52 SAADC directly
+  // Configure channel 0 for AIN7
+  NRF_SAADC->RESOLUTION = SAADC_RESOLUTION_VAL_10bit;
+  NRF_SAADC->CH[0].PSELP = SAADC_CH_PSELP_PSELP_AnalogInput7;
+  NRF_SAADC->CH[0].PSELN = SAADC_CH_PSELN_PSELN_NC;
+  NRF_SAADC->CH[0].CONFIG = (SAADC_CH_CONFIG_GAIN_Gain1_6 << SAADC_CH_CONFIG_GAIN_Pos) |
+                            (SAADC_CH_CONFIG_REFSEL_Internal << SAADC_CH_CONFIG_REFSEL_Pos) |
+                            (SAADC_CH_CONFIG_TACQ_10us << SAADC_CH_CONFIG_TACQ_Pos) |
+                            (SAADC_CH_CONFIG_MODE_SE << SAADC_CH_CONFIG_MODE_Pos);
+  
+  volatile int16_t result;
+  NRF_SAADC->RESULT.PTR = (uint32_t)&result;
+  NRF_SAADC->RESULT.MAXCNT = 1;
+  
+  NRF_SAADC->ENABLE = SAADC_ENABLE_ENABLE_Enabled;
+  NRF_SAADC->TASKS_START = 1;
+  while (!NRF_SAADC->EVENTS_STARTED);
+  NRF_SAADC->EVENTS_STARTED = 0;
+  
+  NRF_SAADC->TASKS_SAMPLE = 1;
+  while (!NRF_SAADC->EVENTS_END);
+  NRF_SAADC->EVENTS_END = 0;
+  
+  NRF_SAADC->TASKS_STOP = 1;
+  while (!NRF_SAADC->EVENTS_STOPPED);
+  NRF_SAADC->EVENTS_STOPPED = 0;
+  
+  NRF_SAADC->ENABLE = SAADC_ENABLE_ENABLE_Disabled;
+  
+  // Internal ref 0.6V, gain 1/6 = 3.6V range
+  // Scale to match analogRead() 3.3V range: result * 3.6/3.3
+  if (result < 0) result = 0;
+  return (uint16_t)((result * 36UL) / 33UL);
 }
 
 void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t len) {
@@ -285,10 +334,26 @@ void updateMeasurements() {
   float vBattery = analogRead(PIN_ADC_BATTERY) * ADC_REF / ADC_MAX * VDIV_BAT;
   float vOutput = analogRead(PIN_ADC_OUTPUT) * ADC_REF / ADC_MAX * VDIV_OUT;
   
-  float currentA = vCurrent / RSENSE;
+  // Read LiPo battery with GPIO-enabled divider
+  pinMode(PIN_LIPO_ENABLE, OUTPUT);
+  digitalWrite(PIN_LIPO_ENABLE, LOW);
+  delayMicroseconds(100);
+  float vLipo = readAIN7() * ADC_REF / ADC_MAX * VDIV_LIPO;
+  pinMode(PIN_LIPO_ENABLE, INPUT);  // disable divider to save power
+  
+  // Total current through sense resistor
+  float totalCurrentA = vCurrent / RSENSE;
+  
+  // Subtract base current: I_base = (3.3V - Vbe - Vsense) / Rbase
+  float vBaseR = ADC_REF - VBE - vCurrent;
+  float baseCurrentA = (vBaseR > 0) ? vBaseR / RBASE : 0;
+  float currentA = totalCurrentA - baseCurrentA;
+  if (currentA < 0) currentA = 0;
+  
   measuredCurrent = (uint16_t)(currentA * 1000000);
   batteryVoltage = (uint16_t)(vBattery * 1000);
   outputVoltage = (uint16_t)(vOutput * 1000);
+  lipoVoltage = (uint16_t)(vLipo * 1000);
 
   // Calculate impedance: R = V / I = (vBattery - vOutput) / current
   if (measuredCurrent > 10) {
@@ -351,7 +416,7 @@ void applyPWM(uint16_t currentUA) {
 }
 
 void updateBLE() {
-  uint8_t meas[10];
+  uint8_t meas[12];
   meas[0] = setCurrent & 0xFF;
   meas[1] = setCurrent >> 8;
   meas[2] = measuredCurrent & 0xFF;
@@ -362,7 +427,9 @@ void updateBLE() {
   meas[7] = outputVoltage >> 8;
   meas[8] = impedance & 0xFF;
   meas[9] = impedance >> 8;
-  measChar.notify(meas, 10);
+  meas[10] = lipoVoltage & 0xFF;
+  meas[11] = lipoVoltage >> 8;
+  measChar.notify(meas, 12);
   
   uint8_t timer[8];
   timer[0] = targetCurrent & 0xFF;
