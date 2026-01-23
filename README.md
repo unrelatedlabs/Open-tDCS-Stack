@@ -7,6 +7,12 @@ Copyright (C) 2024-2026 Peter Kuhar and OpenTDCS Contributors
 
 Open-source transcranial Direct Current Stimulation (tDCS) device using the Seeed Studio XIAO BLE nRF52840.
 
+<img src="docs/device.jpg" alt="device photo" height="220"> <img src="docs/render.png" alt="render" height="220">
+
+
+
+
+
 > Disclaimer: This is not a medical device. See `DISCLAIMER.md`.
 
 ## ⚠️ Safety Warning (tDCS / tES)
@@ -48,6 +54,15 @@ Open-tDCS-Stack is a Bluetooth-enabled tDCS device that provides precise current
 ### Schematics 
 
 ![Open-tDCS Schematic](docs/schematics.png)
+
+<img src="docs/prototype_top.jpg" alt="prototype top" height="400"> <img src="docs/prototype_bottom.jpg" alt="prototype bottom" height="400">
+
+
+### Printing 
+
+Use a 3d printer. FDM is best, but resin should for with abs like resin for headband and electrodes and TPU like for the sponge retention. 
+
+Print headband and electrodes in PLA or PETG and the sponge holder in TPU. Mine was printed on BambuLab P1S (PLA) and A1 Mini (TPU). 
 
 
 ## Firmware
