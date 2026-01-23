@@ -335,6 +335,20 @@
       font-size: 0.875rem;
     }
     
+    .export-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    
+    .export-actions button {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.65rem;
+    }
+    
     .hidden { display: none !important; }
     
     #historyChart {
@@ -534,6 +548,12 @@
         <ul class="session-list" id="sessionList">
           <li class="empty">no sessions yet</li>
         </ul>
+        <div class="export-actions" id="exportActions">
+          <button id="exportJson">Export JSON</button>
+          <button id="exportCsv">Export CSV</button>
+          <button id="importJson">Import JSON</button>
+          <input type="file" id="importFile" accept=".json" class="hidden">
+        </div>
       </div>
     </section>
   </div>
@@ -682,8 +702,8 @@
       currentData.push(measuredCurrent)
       impedanceData.push(impedance)
       
-      if (currentData.length > maxDataPoints) currentData.shift()
-      if (impedanceData.length > maxDataPoints) impedanceData.shift()
+      if (currentData.length > 10000) currentData.shift()
+      if (impedanceData.length > 10000) impedanceData.shift()
     }
 
     function onTimerUpdate(event) {
@@ -830,7 +850,8 @@
 
       ctx.clearRect(0, 0, rect.width, rect.height)
 
-      if (data.length < 2) return
+      const visible = data.slice(-maxDataPoints)
+      if (visible.length < 2) return
 
       ctx.strokeStyle = color
       ctx.lineWidth = 1.5
@@ -839,7 +860,7 @@
       const step = rect.width / (maxDataPoints - 1)
       const yScale = rect.height / maxVal
 
-      data.forEach((val, i) => {
+      visible.forEach((val, i) => {
         const x = i * step
         const y = rect.height - val * yScale
         if (i === 0) ctx.moveTo(x, y)
@@ -931,8 +952,13 @@
 
       if (sessions.length === 0) {
         list.innerHTML = '<li class="empty">no sessions yet</li>'
+        $('exportJson').disabled = true
+        $('exportCsv').disabled = true
         return
       }
+      
+      $('exportJson').disabled = false
+      $('exportCsv').disabled = false
 
       list.innerHTML = sessions.slice(0, 20).map((s, idx) => {
         const date = new Date(s.date)
@@ -1095,9 +1121,98 @@
       setDirectCurrent(value)
     })
 
+    function downloadFile(filename, content, type) {
+      const blob = new Blob([content], { type })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    function exportJson() {
+      if (sessions.length === 0) return
+      const data = {
+        exported: new Date().toISOString(),
+        sessions: sessions.map(s => ({
+          id: s.id,
+          date: s.date,
+          duration: s.duration,
+          current: s.current,
+          notes: s.notes || '',
+          currentData: s.currentData || [],
+          impedanceData: s.impedanceData || []
+        }))
+      }
+      const filename = `tdcs-sessions-${new Date().toISOString().slice(0, 10)}.json`
+      downloadFile(filename, JSON.stringify(data, null, 2), 'application/json')
+    }
+
+    function exportCsv() {
+      if (sessions.length === 0) return
+      const rows = [['date', 'duration_sec', 'current_mA', 'notes']]
+      sessions.forEach(s => {
+        rows.push([
+          s.date,
+          s.duration,
+          s.current,
+          `"${(s.notes || '').replace(/"/g, '""')}"`
+        ])
+      })
+      const csv = rows.map(r => r.join(',')).join('\n')
+      const filename = `tdcs-sessions-${new Date().toISOString().slice(0, 10)}.csv`
+      downloadFile(filename, csv, 'text/csv')
+    }
+
+    function importJson(file) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result)
+          const imported = data.sessions || []
+          if (imported.length === 0) return
+          
+          const existingIds = new Set(sessions.map(s => s.id))
+          let added = 0
+          
+          imported.forEach(s => {
+            if (!existingIds.has(s.id)) {
+              sessions.push({
+                id: s.id,
+                date: s.date,
+                duration: s.duration,
+                current: s.current,
+                notes: s.notes || '',
+                currentData: s.currentData || [],
+                impedanceData: s.impedanceData || []
+              })
+              existingIds.add(s.id)
+              added++
+            }
+          })
+          
+          sessions.sort((a, b) => b.id - a.id)
+          localStorage.setItem('tdcs-sessions', JSON.stringify(sessions))
+          renderSessions()
+          renderHistoryChart()
+        } catch (err) {
+          console.error('Import failed:', err)
+        }
+      }
+      reader.readAsText(file)
+    }
+
     $('connectBtn').addEventListener('click', connect)
     $('startBtn').addEventListener('click', startSession)
     $('stopBtn').addEventListener('click', stopSession)
+    $('exportJson').addEventListener('click', exportJson)
+    $('exportCsv').addEventListener('click', exportCsv)
+    $('importJson').addEventListener('click', () => $('importFile').click())
+    $('importFile').addEventListener('change', (e) => {
+      if (e.target.files[0]) importJson(e.target.files[0])
+      e.target.value = ''
+    })
 
     renderSessions()
     renderHistoryChart()
