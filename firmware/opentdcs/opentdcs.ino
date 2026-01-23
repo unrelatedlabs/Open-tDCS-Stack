@@ -323,16 +323,27 @@ void onTimerWrite(uint16_t conn, BLECharacteristic* chr, uint8_t* data, uint16_t
       Serial.print("/");
       Serial.println(rampDown);
     } else {
-      sessionActive = false;
-      timeRemaining = 0;
-      setCurrent = 0;
-      rampTimer.stop();
-      applyPWM(0);
-      if (!isConnected) {
-        multiplierOff();
+      if (sessionActive && setCurrent > 0) {
+        // ramp down from current level over 5s
+        targetCurrent = setCurrent;
+        sessionStart = millis();
+        totalTime = 5;
+        rampUp = 0;
+        rampDown = 5;
+        timeRemaining = 5;
+        Serial.println("Session STOPPING (5s ramp down)");
+      } else {
+        sessionActive = false;
+        timeRemaining = 0;
+        setCurrent = 0;
+        rampTimer.stop();
+        applyPWM(0);
+        if (!isConnected) {
+          multiplierOff();
+        }
+        updateLED();
+        Serial.println("Session STOP");
       }
-      updateLED();
-      Serial.println("Session STOP");
     }
   }
 }
