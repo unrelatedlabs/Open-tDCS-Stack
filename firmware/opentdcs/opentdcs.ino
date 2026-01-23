@@ -45,7 +45,7 @@ const float ADC_REF = 3.3;
 const float ADC_MAX = 1023.0;
 const float RSENSE = 1000.0;
 const float RBASE = 5000.0;    // base resistor
-const float VBE = 0.7;         // base-emitter voltage
+const float VBE = 0.65;         // base-emitter voltage
 const float VDIV_OUT = 5.3;
 const float VDIV_BAT = 5.3;
 const float VDIV_LIPO = 2.96;  // (1M + 510k) / 510k
@@ -53,6 +53,13 @@ const float VDIV_LIPO = 2.96;  // (1M + 510k) / 510k
 const uint16_t PWM_MAX = 255;  // 8-bit PWM
 const uint16_t CURRENT_MAX_UA = 4000;
 const uint16_t TEST_CURRENT_UA = 50;
+
+// PID controller
+const float KP = 0.02;   // conservative proportional
+const float KI = 0.001;  // slow integral
+const float INT_MAX = 50.0;  // max integral contribution (PWM counts)
+float pidIntegral = 0;
+float pidPwm = 0;
 
 volatile uint16_t targetCurrent = 0;
 volatile uint16_t totalTime = 0;
@@ -143,6 +150,7 @@ void loop() {}
 
 void rampCallback(TimerHandle_t _handle) {
   updateSession();
+  if (sessionActive) updatePID();
 }
 
 void blinkOffCallback(TimerHandle_t _handle) {
@@ -344,8 +352,11 @@ void updateMeasurements() {
   // Total current through sense resistor
   float totalCurrentA = vCurrent / RSENSE;
   
-  // Subtract base current: I_base = (3.3V - Vbe - Vsense) / Rbase
-  float vBaseR = ADC_REF - VBE - vCurrent;
+  // Subtract base current: I_base = (V_pwm - Vbe - Vsense) / Rbase
+  // V_pwm depends on setCurrent (same formula as applyPWM)
+  float setCurrentA = setCurrent / 1000000.0;
+  float vPwm = setCurrentA * RSENSE + VBE;
+  float vBaseR = vPwm - VBE - vCurrent;
   float baseCurrentA = (vBaseR > 0) ? vBaseR / RBASE : 0;
   float currentA = totalCurrentA - baseCurrentA;
   if (currentA < 0) currentA = 0;
@@ -397,18 +408,66 @@ void updateSession() {
     }
 
     setCurrent = current;
-    applyPWM(current);
+    // PID handles actual PWM output
   }
+}
+
+uint16_t readCurrentFast() {
+  float vCurrent = analogRead(PIN_ADC_CURRENT) * ADC_REF / ADC_MAX;
+  float totalCurrentA = vCurrent / RSENSE;
+  
+  // subtract base current: Ib = (Vpwm - Vbe - Vsense) / Rbase
+  float vPwmActual = pidPwm * ADC_REF / PWM_MAX;
+  float vBaseR = vPwmActual - VBE - vCurrent;
+  float baseCurrentA = (vBaseR > 0) ? vBaseR / RBASE : 0;
+  float currentA = totalCurrentA - baseCurrentA;
+  if (currentA < 0) currentA = 0;
+  
+  return (uint16_t)(currentA * 1000000);
+}
+
+void updatePID() {
+  if (setCurrent == 0) {
+    pidIntegral = 0;
+    pidPwm = 0;
+    analogWrite(PIN_PWM, 0);
+    return;
+  }
+  
+  uint16_t current = readCurrentFast();
+  float error = (float)setCurrent - (float)current;
+  
+  // feedforward: estimate PWM from desired current
+  float currentA = setCurrent / 1000000.0;
+  float vPwm = currentA * RSENSE + VBE;
+  float feedforward = (vPwm / ADC_REF) * PWM_MAX;
+  
+  // PI correction with integral clamping
+  pidIntegral += error;
+  if (pidIntegral > INT_MAX / KI) pidIntegral = INT_MAX / KI;
+  if (pidIntegral < -INT_MAX / KI) pidIntegral = -INT_MAX / KI;
+  
+  float correction = KP * error + KI * pidIntegral;
+  pidPwm = feedforward + correction;
+  
+  if (pidPwm > PWM_MAX) pidPwm = PWM_MAX;
+  if (pidPwm < 0) pidPwm = 0;
+  
+  analogWrite(PIN_PWM, (uint16_t)pidPwm);
+  pinMode(PIN_PWM, OUTPUT_H0H1);
 }
 
 void applyPWM(uint16_t currentUA) {
   if (currentUA == 0) {
+    pidIntegral = 0;
+    pidPwm = 0;
     analogWrite(PIN_PWM, 0);
     return;
   }
+  // open-loop for test current (non-session)
   float currentA = currentUA / 1000000.0;
   float vRsense = currentA * RSENSE;
-  float vPwm = vRsense + 0.7;
+  float vPwm = vRsense + VBE;
   uint16_t pwm = (uint16_t)(vPwm / ADC_REF * PWM_MAX);
   if (pwm > PWM_MAX) pwm = PWM_MAX;
   analogWrite(PIN_PWM, pwm);
